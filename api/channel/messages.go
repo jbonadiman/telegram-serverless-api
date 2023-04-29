@@ -76,7 +76,12 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel := strings.TrimPrefix(r.URL.Path, "/api/channel/messages/")
+	channel := queryParams.Get(channelParam)
+	if channel == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(fmt.Sprintf("%q is required", channelParam)))
+		return
+	}
 
 	parsedMessages, err := telegram_parser.GetChannelMessages(
 		channel,
