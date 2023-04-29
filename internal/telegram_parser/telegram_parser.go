@@ -98,6 +98,14 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 		filter.ToDate = time.Now().UTC()
 	}
 
+	if filter.FromDate.After(filter.ToDate) {
+		return nil, fmt.Errorf(
+			"cannot search from messages backwards: fromDate %q is after toDate %q",
+			filter.FromDate.Format("2006-01-02"),
+			filter.ToDate.Format("2006-01-02"),
+		)
+	}
+
 	log.Printf(
 		"filtering messages from %s to %s...\n",
 		filter.FromDate.Format("2006-01-02"),
