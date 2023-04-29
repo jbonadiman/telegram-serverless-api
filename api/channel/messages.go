@@ -20,6 +20,18 @@ const (
 	channelParam  = "channelId"
 )
 
+type apiResponse struct {
+	ChannelId string           `json:"channel"`
+	Messages  []channelMessage `json:"messages"`
+}
+
+type channelMessage struct {
+	Id        string `json:"id"`
+	Image     string `json:"image"`
+	DateEpoch int64  `json:"dateEpoch"`
+	Content   string `json:"content"`
+}
+
 func validateDateParam(param string, queryParams *url.Values) (
 	time.Time,
 	error,
@@ -107,8 +119,25 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("parsing response...", len(parsedMessages))
-	response, err := json.Marshal(parsedMessages)
+	log.Println("parsing response...")
+	payload := apiResponse{
+		ChannelId: channel,
+		Messages:  make([]channelMessage, len(parsedMessages)),
+	}
+
+	for _, message := range parsedMessages {
+		payload.Messages = append(
+			payload.Messages,
+			channelMessage{
+				Id:        strconv.Itoa(message.Id),
+				Image:     message.Image.String(),
+				DateEpoch: message.Date.Unix(),
+				Content:   message.Content,
+			},
+		)
+	}
+
+	response, err := json.Marshal(payload)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
