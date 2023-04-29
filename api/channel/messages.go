@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"telegram_serverless_api/internal/middlewares"
 	"telegram_serverless_api/internal/telegram_parser"
 )
 
@@ -86,11 +85,6 @@ func parseQueryParams(queryParams *url.Values) (
 //goland:noinspection GoUnusedExportedFunction
 func Handle(w http.ResponseWriter, r *http.Request) {
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
-
-	err := middlewares.Auth(w, r)
-	if err != nil {
-		return
-	}
 
 	queryParams := r.URL.Query()
 
