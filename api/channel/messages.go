@@ -55,6 +55,16 @@ func parseQueryParams(queryParams *url.Values) (
 		return nil, err
 	}
 
+	if fromDateParsed.After(toDateParsed) {
+		return nil, errors.New(
+			fmt.Sprintf(
+				"%q needs to be before %q",
+				fromDateParam,
+				toDateParam,
+			),
+		)
+	}
+
 	return &telegram_parser.Filter{
 		ToDate:   toDateParsed,
 		FromDate: fromDateParsed,
