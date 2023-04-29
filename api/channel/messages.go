@@ -1,4 +1,4 @@
-package internal
+package telegram_serverless_api
 
 import (
 	"encoding/json"
