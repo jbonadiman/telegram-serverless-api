@@ -2,6 +2,7 @@ package telegram_parser
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -87,6 +88,8 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 	[]Message,
 	error,
 ) {
+	log.Printf("getting messages from %q...\n", channelUsername)
+
 	if filter.FromDate.IsZero() {
 		filter.FromDate = time.Unix(0, 0)
 	}
@@ -94,6 +97,12 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 	if filter.ToDate.IsZero() {
 		filter.ToDate = time.Now().UTC()
 	}
+
+	log.Printf(
+		"filtering messages from %s to %s...\n",
+		filter.FromDate.Format("2006-01-02"),
+		filter.ToDate.Format("2006-01-02"),
+	)
 
 	channelURL := fmt.Sprintf(channelURLPreview, channelUsername)
 
@@ -151,5 +160,6 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 		return nil, *generalError
 	}
 
+	log.Printf("got %d messages\n", len(messageList))
 	return messageList, nil
 }

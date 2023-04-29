@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"telegram_serverless_api/internal/middlewares"
@@ -17,6 +17,7 @@ import (
 const (
 	toDateParam   = "toDateUTC"
 	fromDateParam = "fromDateUTC"
+	channelParam  = "channelId"
 )
 
 func validateDateParam(param string, queryParams *url.Values) (
@@ -62,6 +63,8 @@ func parseQueryParams(queryParams *url.Values) (
 
 //goland:noinspection GoUnusedExportedFunction
 func Handle(w http.ResponseWriter, r *http.Request) {
+	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
+
 	err := middlewares.Auth(w, r)
 	if err != nil {
 		return
@@ -69,6 +72,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 
 	queryParams := r.URL.Query()
 
+	log.Printf("validating query params: %v...\n", queryParams)
 	filter, err := parseQueryParams(&queryParams)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -87,13 +91,13 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		channel,
 		filter,
 	)
-
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
+	log.Println("parsing response...", len(parsedMessages))
 	response, err := json.Marshal(parsedMessages)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
