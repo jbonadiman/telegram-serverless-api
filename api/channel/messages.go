@@ -122,7 +122,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	log.Println("parsing response...")
 	payload := apiResponse{
 		ChannelId: channel,
-		Messages:  make([]channelMessage, len(parsedMessages)),
+		Messages:  make([]channelMessage, 0, len(parsedMessages)),
 	}
 
 	for _, message := range parsedMessages {
