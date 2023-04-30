@@ -3,7 +3,6 @@ package telegram_parser
 import (
 	"fmt"
 	"log"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -17,12 +16,13 @@ const (
 )
 
 const (
-	historySelector     = ".tgme_channel_history"
-	messagesSelector    = ".tgme_widget_message_wrap"
-	dateSelector        = ".tgme_widget_message_date > time"
-	messageInfoSelector = ".tgme_widget_message"
-	imageSelector       = ".tgme_widget_message_user_photo > img"
-	contentSelector     = ".tgme_widget_message_text"
+	messageSelector        = ".tgme_widget_message_wrap"
+	messageDateSelector    = ".tgme_widget_message_date > time"
+	messageInfoSelector    = ".tgme_widget_message"
+	messageContentSelector = ".tgme_widget_message_text"
+
+	channelImageSelector = ".tgme_channel_info_header img"
+	channelNameSelector  = ".tgme_channel_info_header_title"
 )
 
 type Filter struct {
@@ -30,16 +30,22 @@ type Filter struct {
 	FromDate time.Time
 }
 
+type ChannelHistory struct {
+	Username string
+	Name     string
+	ImageURL string
+	Messages []*Message
+}
+
 type Message struct {
-	Id      int       `json:"id"`
-	Image   url.URL   `json:"image"`
-	Date    time.Time `json:"date"`
-	Content string    `json:"content"`
+	Id      int
+	Date    time.Time
+	Content string
 }
 
 func getMessageDate(outerElement *colly.HTMLElement) (time.Time, error) {
 	dateAsText := outerElement.ChildAttr(
-		dateSelector,
+		messageDateSelector,
 		"datetime",
 	)
 	parsedDate, err := time.Parse(time.RFC3339, dateAsText)
@@ -66,26 +72,12 @@ func getMessageId(outerElement *colly.HTMLElement) (int, error) {
 	return parsedId, nil
 }
 
-func getMessageImage(outerElement *colly.HTMLElement) (*url.URL, error) {
-	parsedUrl, err := url.Parse(
-		outerElement.ChildAttr(
-			imageSelector,
-			"src",
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return parsedUrl, nil
-}
-
 func getMessageContent(outerElement *colly.HTMLElement) string {
-	return outerElement.ChildText(contentSelector)
+	return outerElement.ChildText(messageContentSelector)
 }
 
 func GetChannelMessages(channelUsername string, filter *Filter) (
-	[]Message,
+	*ChannelHistory,
 	error,
 ) {
 	log.Printf("getting messages from %q...\n", channelUsername)
@@ -106,15 +98,31 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 
 	channelURL := fmt.Sprintf(channelURLPreview, channelUsername)
 
-	messageList := make([]Message, 0, maxMessageCount)
+	channel := ChannelHistory{
+		Username: channelUsername,
+		Messages: make([]*Message, 0, maxMessageCount),
+	}
+
 	var generalError *error
 
 	c := colly.NewCollector()
 
 	c.OnHTML(
-		historySelector, func(history *colly.HTMLElement) {
-			history.ForEachWithBreak(
-				messagesSelector,
+		channelImageSelector, func(e *colly.HTMLElement) {
+			channel.ImageURL = e.Attr("src")
+		},
+	)
+
+	c.OnHTML(
+		channelNameSelector, func(e *colly.HTMLElement) {
+			channel.Name = e.Text
+		},
+	)
+
+	c.OnHTML(
+		"main", func(e *colly.HTMLElement) {
+			e.ForEachWithBreak(
+				messageSelector,
 				func(_ int, wrapper *colly.HTMLElement) bool {
 					parsedDate, err := getMessageDate(wrapper)
 					if err != nil {
@@ -132,20 +140,13 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 						return false // break
 					}
 
-					parsedUrl, err := getMessageImage(wrapper)
-					if err != nil {
-						generalError = &err
-						return false // break
-					}
-
 					message := Message{
 						Id:      parsedId,
-						Image:   *parsedUrl,
 						Date:    parsedDate,
 						Content: getMessageContent(wrapper),
 					}
 
-					messageList = append(messageList, message)
+					channel.Messages = append(channel.Messages, &message)
 					return true
 				},
 			)
@@ -160,6 +161,6 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 		return nil, *generalError
 	}
 
-	log.Printf("got %d messages\n", len(messageList))
-	return messageList, nil
+	log.Printf("got %d messages\n", len(channel.Messages))
+	return &channel, nil
 }

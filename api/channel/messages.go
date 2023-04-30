@@ -20,13 +20,18 @@ const (
 )
 
 type apiResponse struct {
-	ChannelId string           `json:"channel"`
-	Messages  []channelMessage `json:"messages"`
+	Channel  channel   `json:"channel"`
+	Messages []message `json:"messages"`
 }
 
-type channelMessage struct {
+type channel struct {
+	Username string `json:"username"`
+	Name     string `json:"name"`
+	ImageURL string `json:"image"`
+}
+
+type message struct {
 	Id        string `json:"id"`
-	Image     string `json:"image"`
 	DateEpoch int64  `json:"dateEpoch"`
 	Content   string `json:"content"`
 }
@@ -96,15 +101,15 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channel := queryParams.Get(channelParam)
-	if channel == "" {
+	channelUsername := queryParams.Get(channelParam)
+	if channelUsername == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(fmt.Sprintf("%q is required", channelParam)))
 		return
 	}
 
-	parsedMessages, err := telegram_parser.GetChannelMessages(
-		channel,
+	parsedChannel, err := telegram_parser.GetChannelMessages(
+		channelUsername,
 		filter,
 	)
 	if err != nil {
@@ -115,18 +120,21 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("parsing response...")
 	payload := apiResponse{
-		ChannelId: channel,
-		Messages:  make([]channelMessage, 0, len(parsedMessages)),
+		Channel: channel{
+			Username: channelUsername,
+			Name:     parsedChannel.Name,
+			ImageURL: parsedChannel.ImageURL,
+		},
+		Messages: make([]message, 0, len(parsedChannel.Messages)),
 	}
 
-	for _, message := range parsedMessages {
+	for _, msg := range parsedChannel.Messages {
 		payload.Messages = append(
 			payload.Messages,
-			channelMessage{
-				Id:        strconv.Itoa(message.Id),
-				Image:     message.Image.String(),
-				DateEpoch: message.Date.Unix(),
-				Content:   message.Content,
+			message{
+				Id:        strconv.Itoa(msg.Id),
+				DateEpoch: msg.Date.Unix(),
+				Content:   msg.Content,
 			},
 		)
 	}
