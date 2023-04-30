@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	toDateParam   = "toDateUTC"
-	fromDateParam = "fromDateUTC"
-	channelParam  = "channelId"
+	toDateParamName   = "toDateUTC"
+	fromDateParamName = "fromDateUTC"
+	channelParam      = "channelId"
 )
 
 type apiResponse struct {
@@ -36,20 +36,16 @@ type message struct {
 	Content   string `json:"content"`
 }
 
-func validateDateParam(param string, queryParams *url.Values) (
+func parseEpoch(epochParam string, paramName string) (
 	time.Time,
 	error,
 ) {
-	if !queryParams.Has(param) {
-		return time.Time{}, errors.New(fmt.Sprintf("%q is required", param))
-	}
-
-	dateEpoch, err := strconv.ParseInt(queryParams.Get(param), 10, 64)
+	dateEpoch, err := strconv.ParseInt(epochParam, 10, 64)
 	if err != nil {
 		return time.Time{}, errors.New(
 			fmt.Sprintf(
 				"%q needs to be a unix epoch",
-				param,
+				paramName,
 			),
 		)
 	}
@@ -61,24 +57,36 @@ func parseQueryParams(queryParams *url.Values) (
 	*telegram_parser.Filter,
 	error,
 ) {
-	toDateParsed, err := validateDateParam(toDateParam, queryParams)
+	var toDateParsed time.Time
+
+	if !queryParams.Has(fromDateParamName) {
+		return nil, errors.New(fmt.Sprintf("%q is required", fromDateParamName))
+	}
+
+	fromDateParam := queryParams.Get(fromDateParamName)
+
+	fromDateParsed, err := parseEpoch(fromDateParam, fromDateParamName)
 	if err != nil {
 		return nil, err
 	}
 
-	fromDateParsed, err := validateDateParam(fromDateParam, queryParams)
-	if err != nil {
-		return nil, err
-	}
+	if queryParams.Has(toDateParamName) {
+		toDateParam := queryParams.Get(toDateParamName)
 
-	if fromDateParsed.After(toDateParsed) {
-		return nil, errors.New(
-			fmt.Sprintf(
-				"%q needs to be before %q",
-				fromDateParam,
-				toDateParam,
-			),
-		)
+		toDateParsed, err = parseEpoch(toDateParam, toDateParamName)
+		if err != nil {
+			return nil, err
+		}
+
+		if fromDateParsed.After(toDateParsed) {
+			return nil, errors.New(
+				fmt.Sprintf(
+					"%q needs to be before %q",
+					fromDateParamName,
+					toDateParamName,
+				),
+			)
+		}
 	}
 
 	return &telegram_parser.Filter{
