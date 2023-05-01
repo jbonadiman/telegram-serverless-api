@@ -154,8 +154,6 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Add("Cache-Control", "s-maxage=10, stale-while-revalidate=59")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(response)
 }
