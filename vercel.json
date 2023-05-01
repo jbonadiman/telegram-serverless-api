@@ -3,7 +3,7 @@
   "cleanUrls": true,
   "framework": null,
   "functions": {
-    "api/*": {
+    "api/**": {
       "memory": 128,
       "maxDuration": 10
     }
