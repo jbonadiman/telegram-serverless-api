@@ -8,9 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"telegram_serverless_api/internal"
 	"time"
-
-	"telegram_serverless_api/internal/telegram_parser"
 )
 
 const (
@@ -54,7 +53,7 @@ func parseEpoch(epochParam string, paramName string) (
 }
 
 func parseQueryParams(queryParams *url.Values) (
-	*telegram_parser.Filter,
+	*internal.Filter,
 	error,
 ) {
 	var toDateParsed time.Time
@@ -89,7 +88,7 @@ func parseQueryParams(queryParams *url.Values) (
 		}
 	}
 
-	return &telegram_parser.Filter{
+	return &internal.Filter{
 		ToDate:   toDateParsed,
 		FromDate: fromDateParsed,
 	}, nil
@@ -116,7 +115,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsedChannel, err := telegram_parser.GetChannelMessages(
+	parsedChannel, err := internal.GetChannelMessages(
 		channelUsername,
 		filter,
 	)

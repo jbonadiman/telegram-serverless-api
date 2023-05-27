@@ -1,4 +1,4 @@
-package telegram_parser
+package internal
 
 import (
 	"fmt"
