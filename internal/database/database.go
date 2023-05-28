@@ -65,6 +65,9 @@ func (d *Database) GetHistory(username string) (*telegram.ChannelHistory, error)
 
 	err := d.db.View(func(tx *buntdb.Tx) error {
 		val, err := tx.Get(username)
+		if err == buntdb.ErrNotFound {
+			return telegram.ErrChannelIsEmpty
+		}
 		if err != nil {
 			return err
 		}
