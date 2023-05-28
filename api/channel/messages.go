@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -41,11 +40,9 @@ type messageResponse struct {
 func parseEpoch(epochParam string, paramName string) (time.Time, error) {
 	dateEpoch, err := strconv.ParseInt(epochParam, 10, 64)
 	if err != nil {
-		return time.Time{}, errors.New(
-			fmt.Sprintf(
-				"%q needs to be a unix epoch",
-				paramName,
-			),
+		return time.Time{}, fmt.Errorf(
+			"%q needs to be a unix epoch",
+			paramName,
 		)
 	}
 
@@ -75,12 +72,11 @@ func parseQueryParams(queryParams *url.Values) (*telegram.Filter, error) {
 		}
 
 		if fromDateParsed.After(toDateParsed) {
-			return nil,
-				fmt.Errorf(
-					"%q needs to be before %q",
-					fromDateParamName,
-					toDateParamName,
-				)
+			return nil, fmt.Errorf(
+				"%q needs to be before %q",
+				fromDateParamName,
+				toDateParamName,
+			)
 		}
 	}
 
