@@ -115,7 +115,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsedChannel, err := internal.GetChannelMessages(
+	parsedChannel, err := internal.LoadChannelHistory(
 		channelUsername,
 		filter,
 	)
