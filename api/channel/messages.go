@@ -49,7 +49,7 @@ func parseEpoch(epochParam string, paramName string) (time.Time, error) {
 	return time.Unix(dateEpoch, 0).UTC(), nil
 }
 
-func parseQueryParams(queryParams *url.Values) (*telegram.Filter, error) {
+func parseQueryParams(queryParams *url.Values) (*telegram.QueryOptions, error) {
 	var toDateParsed time.Time
 
 	if !queryParams.Has(fromDateParamName) {
@@ -80,7 +80,7 @@ func parseQueryParams(queryParams *url.Values) (*telegram.Filter, error) {
 		}
 	}
 
-	return &telegram.Filter{
+	return &telegram.QueryOptions{
 		ToDate:   toDateParsed,
 		FromDate: fromDateParsed,
 	}, nil
@@ -123,16 +123,6 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		channelUsername,
 		&storage,
 	)
-
-	if err = channel.LoadChannelHistory(
-		telegram.ScrapeOptions{
-			Username: channelUsername,
-		},
-	); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(err.Error()))
-		return
-	}
 
 	history, err := channel.QueryChannelHistory(filter)
 	if err != nil {

@@ -5,9 +5,10 @@ import (
 	"time"
 )
 
-type Filter struct {
-	ToDate   time.Time
-	FromDate time.Time
+type queryOptions struct {
+	FetchAsNeeded bool
+	ToDate        time.Time
+	FromDate      time.Time
 }
 
 type ChannelStorage interface {
@@ -36,7 +37,7 @@ type Channel struct {
 }
 
 type TelegramChannel interface {
-	QueryHistory(channelUsername string, filter Filter) (*ChannelHistory, error)
+	QueryHistory(string, queryOptions) (*ChannelHistory, error)
 }
 
 func NewChannel(channelUsername string, storage *ChannelStorage) *Channel {
@@ -46,7 +47,15 @@ func NewChannel(channelUsername string, storage *ChannelStorage) *Channel {
 	}
 }
 
-func (c *Channel) LoadChannelHistory(opt ScrapeOptions) error {
+func NewQuery(fromDateUTC, toDateUTC time.Time) *queryOptions {
+	return &queryOptions{
+		FromDate:      fromDateUTC,
+		ToDate:        toDateUTC,
+		FetchAsNeeded: true,
+	}
+}
+
+func (c *Channel) loadChannelHistory(opt ScrapeOptions) error {
 	history, err := ScrapeChannelHistory(opt)
 	if err != nil {
 		return err
@@ -57,31 +66,64 @@ func (c *Channel) LoadChannelHistory(opt ScrapeOptions) error {
 	return c.storage.SaveHistory(history)
 }
 
-func (c *Channel) QueryChannelHistory(filter *Filter) (*ChannelHistory, error) {
-	if filter.FromDate.IsZero() {
-		filter.FromDate = time.Unix(0, 0)
+func (c *Channel) QueryChannelHistory(opt *queryOptions) (*ChannelHistory, error) {
+	if opt.FromDate.IsZero() {
+		opt.FromDate = time.Unix(0, 0)
 	}
 
-	if filter.ToDate.IsZero() {
-		filter.ToDate = time.Now().UTC()
+	if opt.ToDate.IsZero() {
+		opt.ToDate = time.Now().UTC()
+	}
+
+	channel, err := c.storage.GetHistory(c.Username)
+	if err != nil && err != ErrChannelIsEmpty {
+		return nil, err
 	}
 
 	log.Printf(
 		"filtering messages from %s to %s...\n",
-		filter.FromDate.Format("2006-01-02"),
-		filter.ToDate.Format("2006-01-02"),
+		opt.FromDate.Format("2006-01-02"),
+		opt.ToDate.Format("2006-01-02"),
 	)
 
-	channel, err := c.storage.GetHistory(c.Username)
-	if err != nil {
-		return nil, err
+	if err == ErrChannelIsEmpty {
+		if opt.FetchAsNeeded {
+			log.Println("channel is empty, fetching history...")
+			err = c.loadChannelHistory(ScrapeOptions{
+				Username: c.Username,
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, ErrNoMessagesInRange
+		}
 	}
 
 	filteredMessages := make([]*Message, 0, len(channel.Messages))
 
+	for {
+		lastMessage := channel.Messages[len(channel.Messages)-1]
+		// needs to update local storage
+		if lastMessage.Date.Before(opt.FromDate) {
+			if opt.FetchAsNeeded {
+				log.Println("fetching newer history...")
+				err = c.loadChannelHistory(ScrapeOptions{
+					Username: c.Username,
+					AfterID:  lastMessage.Id,
+				})
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, ErrNoMessagesInRange
+			}
+		}
+	}
+
 	for _, message := range channel.Messages {
-		if message.Date.After(filter.FromDate) &&
-			message.Date.Before(filter.ToDate) {
+		if message.Date.After(opt.FromDate) &&
+			message.Date.Before(opt.ToDate) {
 			filteredMessages = append(filteredMessages, message)
 		}
 	}
