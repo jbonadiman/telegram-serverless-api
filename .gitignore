@@ -1,3 +1,4 @@
 .idea
 /main.*
 .vscode/launch.json
+*.db

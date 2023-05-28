@@ -56,7 +56,7 @@ func parseQueryParams(queryParams *url.Values) (*telegram.Filter, error) {
 	var toDateParsed time.Time
 
 	if !queryParams.Has(fromDateParamName) {
-		return nil, errors.New(fmt.Sprintf("%q is required", fromDateParamName))
+		return nil, fmt.Errorf("%q is required", fromDateParamName)
 	}
 
 	fromDateParam := queryParams.Get(fromDateParamName)
@@ -75,13 +75,12 @@ func parseQueryParams(queryParams *url.Values) (*telegram.Filter, error) {
 		}
 
 		if fromDateParsed.After(toDateParsed) {
-			return nil, errors.New(
-				fmt.Sprintf(
+			return nil,
+				fmt.Errorf(
 					"%q needs to be before %q",
 					fromDateParamName,
 					toDateParamName,
-				),
-			)
+				)
 		}
 	}
 
