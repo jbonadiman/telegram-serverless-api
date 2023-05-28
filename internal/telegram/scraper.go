@@ -1,4 +1,4 @@
-package internal
+package telegram
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	channelURLPreview = "https://t.me/s/%s"
+	channelUrlPreview = "https://t.me/s/%s"
 	maxMessageCount   = 20
 )
 
@@ -25,25 +25,13 @@ const (
 	channelNameSelector  = ".tgme_channel_info_header_title"
 )
 
-type Filter struct {
-	ToDate   time.Time
-	FromDate time.Time
-}
-
-type ChannelHistory struct {
+type ScrapeOptions struct {
 	Username string
-	Name     string
-	ImageURL string
-	Messages []*Message
+	BeforeID int
+	AfterID  int
 }
 
-type Message struct {
-	Id      int
-	Date    time.Time
-	Content string
-}
-
-func getMessageDate(outerElement *colly.HTMLElement) (time.Time, error) {
+func scrapeMessageDate(outerElement *colly.HTMLElement) (time.Time, error) {
 	dateAsText := outerElement.ChildAttr(
 		messageDateSelector,
 		"datetime",
@@ -56,7 +44,7 @@ func getMessageDate(outerElement *colly.HTMLElement) (time.Time, error) {
 	return parsedDate.UTC(), nil
 }
 
-func getMessageId(outerElement *colly.HTMLElement) (int, error) {
+func scrapeMessageId(outerElement *colly.HTMLElement) (int, error) {
 	idAsText := strings.Split(
 		outerElement.ChildAttr(
 			messageInfoSelector,
@@ -72,34 +60,20 @@ func getMessageId(outerElement *colly.HTMLElement) (int, error) {
 	return parsedId, nil
 }
 
-func getMessageContent(outerElement *colly.HTMLElement) string {
+func scrapeMessageContent(outerElement *colly.HTMLElement) string {
 	return outerElement.ChildText(messageContentSelector)
 }
 
-func GetChannelMessages(channelUsername string, filter *Filter) (
+func ScrapeChannelHistory(opt ScrapeOptions) (
 	*ChannelHistory,
 	error,
 ) {
-	log.Printf("getting messages from %q...\n", channelUsername)
+	log.Printf("getting messages from %q...\n", opt.Username)
 
-	if filter.FromDate.IsZero() {
-		filter.FromDate = time.Unix(0, 0)
-	}
-
-	if filter.ToDate.IsZero() {
-		filter.ToDate = time.Now().UTC()
-	}
-
-	log.Printf(
-		"filtering messages from %s to %s...\n",
-		filter.FromDate.Format("2006-01-02"),
-		filter.ToDate.Format("2006-01-02"),
-	)
-
-	channelURL := fmt.Sprintf(channelURLPreview, channelUsername)
+	channelURL := fmt.Sprintf(channelUrlPreview, opt.Username)
 
 	channel := ChannelHistory{
-		Username: channelUsername,
+		Username: opt.Username,
 		Messages: make([]*Message, 0, maxMessageCount),
 	}
 
@@ -124,17 +98,13 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 			e.ForEachWithBreak(
 				messageSelector,
 				func(_ int, wrapper *colly.HTMLElement) bool {
-					parsedDate, err := getMessageDate(wrapper)
+					parsedDate, err := scrapeMessageDate(wrapper)
 					if err != nil {
 						generalError = &err
 						return false // break
 					}
 
-					if parsedDate.Before(filter.FromDate) || parsedDate.After(filter.ToDate) {
-						return true // continue
-					}
-
-					parsedId, err := getMessageId(wrapper)
+					parsedId, err := scrapeMessageId(wrapper)
 					if err != nil {
 						generalError = &err
 						return false // break
@@ -143,7 +113,7 @@ func GetChannelMessages(channelUsername string, filter *Filter) (
 					message := Message{
 						Id:      parsedId,
 						Date:    parsedDate,
-						Content: getMessageContent(wrapper),
+						Content: scrapeMessageContent(wrapper),
 					}
 
 					channel.Messages = append(channel.Messages, &message)

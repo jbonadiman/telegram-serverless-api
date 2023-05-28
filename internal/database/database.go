@@ -1,17 +1,11 @@
-package internal
+package database
 
 import (
 	"encoding/json"
 
+	"github.com/jbonadiman/telegram-serverless-api/internal/telegram"
 	"github.com/tidwall/buntdb"
 )
-
-type ChannelStore interface {
-	SaveHistory(channel *ChannelHistory) error
-	GetHistory(username string) (*ChannelHistory, error)
-
-	Close() error
-}
 
 type Database struct {
 	db *buntdb.DB
@@ -26,7 +20,7 @@ func NewDatabase(path string) (*Database, error) {
 	return &Database{db}, nil
 }
 
-func (d *Database) SaveHistory(channel *ChannelHistory) error {
+func (d *Database) SaveHistory(channel *telegram.ChannelHistory) error {
 	d.db.Update(func(tx *buntdb.Tx) error {
 		val, err := tx.Get(channel.Username)
 		if err == buntdb.ErrNotFound {
@@ -42,7 +36,7 @@ func (d *Database) SaveHistory(channel *ChannelHistory) error {
 			return err
 		}
 
-		var history ChannelHistory
+		var history telegram.ChannelHistory
 		if err := json.Unmarshal([]byte(val), &history); err != nil {
 			return err
 		}
@@ -66,8 +60,8 @@ func (d *Database) Close() error {
 	return d.db.Close()
 }
 
-func (d *Database) GetHistory(username string) (*ChannelHistory, error) {
-	var history ChannelHistory
+func (d *Database) GetHistory(username string) (*telegram.ChannelHistory, error) {
+	var history telegram.ChannelHistory
 
 	err := d.db.View(func(tx *buntdb.Tx) error {
 		val, err := tx.Get(username)

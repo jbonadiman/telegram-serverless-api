@@ -1,4 +1,4 @@
-package internal
+package telegram
 
 import (
 	"log"
@@ -8,6 +8,13 @@ import (
 type Filter struct {
 	ToDate   time.Time
 	FromDate time.Time
+}
+
+type ChannelStore interface {
+	SaveHistory(channel *ChannelHistory) error
+	GetHistory(username string) (*ChannelHistory, error)
+
+	Close() error
 }
 
 type ChannelHistory struct {
@@ -25,34 +32,23 @@ type Message struct {
 
 type Channel struct {
 	Username string
-	Storage    *ChannelStore
+	storage  ChannelStore
 }
 
 type TelegramChannel interface {
 	QueryHistory(channelUsername string, filter Filter) (*ChannelHistory, error)
 }
 
-var (
-	storage *ChannelStore
-)
-
-func NewChannel(channelUsername string) (*Channel, error) {
-	if storage == nil {
-		storage, err := NewDatabase(DB_PATH)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-
+func NewChannel(channelUsername string, storage *ChannelStore) (*Channel, error) {
 	return &Channel{
 		Username: channelUsername,
+		storage:  *storage,
+	}, nil
+}
 
-	}
-
-func (t *Channel) LoadChannelHistory() error {
-	history, err := internal.ScrapeChannelPage(ChannelPageOptions{
-		Username: t.ChannelUsername,
+func (c *Channel) LoadChannelHistory() error {
+	history, err := ScrapeChannelHistory(ScrapeOptions{
+		Username: c.Username,
 	})
 	if err != nil {
 		return err
@@ -60,20 +56,10 @@ func (t *Channel) LoadChannelHistory() error {
 
 	log.Printf("saving %d messages...\n", len(history.Messages))
 
-	var db ChannelStore
-
-	db, err = NewDatabase(DB_PATH)
-	if err != nil {
-		return err
-	}
-
-	return db.SaveHistory(&history)
+	return c.storage.SaveHistory(history)
 }
 
-func QueryChannelHistory(channelUsername string, filter *Filter) (
-	*ChannelHistory,
-	error,
-) {
+func (c *Channel) QueryChannelHistory(filter *Filter) (*ChannelHistory, error) {
 	if filter.FromDate.IsZero() {
 		filter.FromDate = time.Unix(0, 0)
 	}
@@ -88,14 +74,7 @@ func QueryChannelHistory(channelUsername string, filter *Filter) (
 		filter.ToDate.Format("2006-01-02"),
 	)
 
-	var db ChannelStore
-
-	db, err := NewDatabase(DB_PATH)
-	if err != nil {
-		return nil, err
-	}
-
-	channel, err := db.GetHistory(channelUsername)
+	channel, err := c.storage.GetHistory(c.Username)
 	if err != nil {
 		return nil, err
 	}
