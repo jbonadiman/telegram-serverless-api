@@ -10,7 +10,7 @@ type Filter struct {
 	FromDate time.Time
 }
 
-type ChannelStore interface {
+type ChannelStorage interface {
 	SaveHistory(channel *ChannelHistory) error
 	GetHistory(username string) (*ChannelHistory, error)
 
@@ -32,24 +32,22 @@ type Message struct {
 
 type Channel struct {
 	Username string
-	storage  ChannelStore
+	storage  ChannelStorage
 }
 
 type TelegramChannel interface {
 	QueryHistory(channelUsername string, filter Filter) (*ChannelHistory, error)
 }
 
-func NewChannel(channelUsername string, storage *ChannelStore) (*Channel, error) {
+func NewChannel(channelUsername string, storage *ChannelStorage) *Channel {
 	return &Channel{
 		Username: channelUsername,
 		storage:  *storage,
-	}, nil
+	}
 }
 
-func (c *Channel) LoadChannelHistory() error {
-	history, err := ScrapeChannelHistory(ScrapeOptions{
-		Username: c.Username,
-	})
+func (c *Channel) LoadChannelHistory(opt ScrapeOptions) error {
+	history, err := ScrapeChannelHistory(opt)
 	if err != nil {
 		return err
 	}

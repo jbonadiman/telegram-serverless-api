@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"telegram_serverless_api/internal"
 	"time"
+
+	"github.com/jbonadiman/telegram-serverless-api/internal"
+	"github.com/jbonadiman/telegram-serverless-api/internal/database"
+	"github.com/jbonadiman/telegram-serverless-api/internal/telegram"
 )
 
 const (
@@ -19,26 +22,23 @@ const (
 )
 
 type apiResponse struct {
-	Channel  channel   `json:"channel"`
-	Messages []message `json:"messages"`
+	Channel  channelResponse   `json:"channel"`
+	Messages []messageResponse `json:"messages"`
 }
 
-type channel struct {
+type channelResponse struct {
 	Username string `json:"username"`
 	Name     string `json:"name"`
 	ImageURL string `json:"image"`
 }
 
-type message struct {
+type messageResponse struct {
 	Id        string `json:"id"`
 	DateEpoch int64  `json:"dateEpoch"`
 	Content   string `json:"content"`
 }
 
-func parseEpoch(epochParam string, paramName string) (
-	time.Time,
-	error,
-) {
+func parseEpoch(epochParam string, paramName string) (time.Time, error) {
 	dateEpoch, err := strconv.ParseInt(epochParam, 10, 64)
 	if err != nil {
 		return time.Time{}, errors.New(
@@ -52,10 +52,7 @@ func parseEpoch(epochParam string, paramName string) (
 	return time.Unix(dateEpoch, 0).UTC(), nil
 }
 
-func parseQueryParams(queryParams *url.Values) (
-	*internal.Filter,
-	error,
-) {
+func parseQueryParams(queryParams *url.Values) (*telegram.Filter, error) {
 	var toDateParsed time.Time
 
 	if !queryParams.Has(fromDateParamName) {
@@ -88,13 +85,22 @@ func parseQueryParams(queryParams *url.Values) (
 		}
 	}
 
-	return &internal.Filter{
+	return &telegram.Filter{
 		ToDate:   toDateParsed,
 		FromDate: fromDateParsed,
 	}, nil
 }
 
-//goland:noinspection GoUnusedExportedFunction
+func initializeDB() telegram.ChannelStorage {
+	var db telegram.ChannelStorage
+	db, err := database.NewDatabase(internal.DbPath)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	return db
+}
+
 func Handle(w http.ResponseWriter, r *http.Request) {
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 
@@ -115,10 +121,25 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsedChannel, err := internal.LoadChannelHistory(
+	storage := initializeDB()
+	defer storage.Close()
+
+	channel := telegram.NewChannel(
 		channelUsername,
-		filter,
+		&storage,
 	)
+
+	if err = channel.LoadChannelHistory(
+		telegram.ScrapeOptions{
+			Username: channelUsername,
+		},
+	); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+
+	history, err := channel.QueryChannelHistory(filter)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
@@ -127,18 +148,18 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("parsing response...")
 	payload := apiResponse{
-		Channel: channel{
+		Channel: channelResponse{
 			Username: channelUsername,
-			Name:     parsedChannel.Name,
-			ImageURL: parsedChannel.ImageURL,
+			Name:     history.Name,
+			ImageURL: history.ImageURL,
 		},
-		Messages: make([]message, 0, len(parsedChannel.Messages)),
+		Messages: make([]messageResponse, 0, len(history.Messages)),
 	}
 
-	for _, msg := range parsedChannel.Messages {
+	for _, msg := range history.Messages {
 		payload.Messages = append(
 			payload.Messages,
-			message{
+			messageResponse{
 				Id:        strconv.Itoa(msg.Id),
 				DateEpoch: msg.Date.Unix(),
 				Content:   msg.Content,
