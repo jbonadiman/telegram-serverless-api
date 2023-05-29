@@ -16,6 +16,7 @@ const (
 )
 
 const (
+	noMessagesSelector     = ".tme_no_messages_found"
 	messageSelector        = ".tgme_widget_message_wrap"
 	messageDateSelector    = ".tgme_widget_message_date > time"
 	messageInfoSelector    = ".tgme_widget_message"
@@ -64,7 +65,7 @@ func scrapeMessageContent(outerElement *colly.HTMLElement) string {
 	return outerElement.ChildText(messageContentSelector)
 }
 
-func ScrapeChannelHistory(opt ScrapeOptions) (
+func scrapeChannelHistory(opt ScrapeOptions) (
 	*ChannelHistory,
 	error,
 ) {
@@ -77,9 +78,13 @@ func ScrapeChannelHistory(opt ScrapeOptions) (
 		Messages: make([]*Message, 0, maxMessageCount),
 	}
 
-	var generalError *error
+	generalError := make([]error, 0, 5)
 
 	c := colly.NewCollector()
+
+	c.OnHTML(noMessagesSelector, func(e *colly.HTMLElement) {
+		generalError = append(generalError, ErrNoNewMessages)
+	})
 
 	c.OnHTML(
 		channelImageSelector, func(e *colly.HTMLElement) {
@@ -100,13 +105,13 @@ func ScrapeChannelHistory(opt ScrapeOptions) (
 				func(_ int, wrapper *colly.HTMLElement) bool {
 					parsedDate, err := scrapeMessageDate(wrapper)
 					if err != nil {
-						generalError = &err
+						generalError = append(generalError, err)
 						return false // break
 					}
 
 					parsedId, err := scrapeMessageId(wrapper)
 					if err != nil {
-						generalError = &err
+						generalError = append(generalError, err)
 						return false // break
 					}
 
@@ -123,12 +128,26 @@ func ScrapeChannelHistory(opt ScrapeOptions) (
 		},
 	)
 
-	err := c.Visit(channelURL)
+	idFilter := ""
+
+	if opt.AfterID > 0 {
+		idFilter = fmt.Sprintf("?after=%d", opt.AfterID)
+	} else if opt.BeforeID > 0 {
+		idFilter = fmt.Sprintf("?before=%d", opt.BeforeID)
+	}
+
+	err := c.Visit(channelURL + idFilter)
 	if err != nil {
 		return nil, err
 	}
 	if generalError != nil {
-		return nil, *generalError
+		for _, err := range generalError {
+			if err == ErrNoNewMessages {
+				return nil, err
+			}
+		}
+
+		return nil, generalError[len(generalError)-1]
 	}
 
 	log.Printf("got %d messages\n", len(channel.Messages))
