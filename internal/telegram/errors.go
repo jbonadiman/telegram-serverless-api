@@ -7,4 +7,5 @@ import (
 var (
 	ErrNoMessagesInRange = errors.New("found no messages in given range")
 	ErrChannelIsEmpty    = errors.New("channel is empty")
+	ErrNoNewMessages     = errors.New("no new messages")
 )
