@@ -56,7 +56,7 @@ func NewQuery(fromDateUTC, toDateUTC time.Time) *queryOptions {
 }
 
 func (c *Channel) loadChannelHistory(opt ScrapeOptions) error {
-	history, err := ScrapeChannelHistory(opt)
+	history, err := scrapeChannelHistory(opt)
 	if err != nil {
 		return err
 	}
@@ -100,26 +100,38 @@ func (c *Channel) QueryChannelHistory(opt *queryOptions) (*ChannelHistory, error
 		}
 	}
 
-	filteredMessages := make([]*Message, 0, len(channel.Messages))
-
 	for {
 		lastMessage := channel.Messages[len(channel.Messages)-1]
-		// needs to update local storage
-		if lastMessage.Date.Before(opt.FromDate) {
-			if opt.FetchAsNeeded {
-				log.Println("fetching newer history...")
-				err = c.loadChannelHistory(ScrapeOptions{
-					Username: c.Username,
-					AfterID:  lastMessage.Id,
-				})
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, ErrNoMessagesInRange
-			}
+
+		if lastMessage.Date.After(opt.ToDate) {
+			break
+		}
+
+		// needs to update local storage, fetching new messages
+		if !opt.FetchAsNeeded {
+			return nil, ErrNoMessagesInRange
+		}
+
+		log.Println("fetching newer history...")
+		err = c.loadChannelHistory(ScrapeOptions{
+			Username: c.Username,
+			AfterID:  lastMessage.Id,
+		})
+		if err == ErrNoNewMessages {
+			log.Println("found no new messages")
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		channel, err = c.storage.GetHistory(c.Username)
+		if err != nil {
+			return nil, err
 		}
 	}
+
+	filteredMessages := make([]*Message, 0, len(channel.Messages))
 
 	for _, message := range channel.Messages {
 		if message.Date.After(opt.FromDate) &&
