@@ -37,6 +37,11 @@ type messageResponse struct {
 	Content   string `json:"content"`
 }
 
+type timeFrame struct {
+	FromDate time.Time
+	ToDate   time.Time
+}
+
 func parseEpoch(epochParam string, paramName string) (time.Time, error) {
 	dateEpoch, err := strconv.ParseInt(epochParam, 10, 64)
 	if err != nil {
@@ -49,18 +54,18 @@ func parseEpoch(epochParam string, paramName string) (time.Time, error) {
 	return time.Unix(dateEpoch, 0).UTC(), nil
 }
 
-func parseQueryParams(queryParams *url.Values) (*telegram.QueryOptions, error) {
+func parseQueryParams(queryParams *url.Values) (timeFrame, error) {
 	var toDateParsed time.Time
 
 	if !queryParams.Has(fromDateParamName) {
-		return nil, fmt.Errorf("%q is required", fromDateParamName)
+		return timeFrame{}, fmt.Errorf("%q is required", fromDateParamName)
 	}
 
 	fromDateParam := queryParams.Get(fromDateParamName)
 
 	fromDateParsed, err := parseEpoch(fromDateParam, fromDateParamName)
 	if err != nil {
-		return nil, err
+		return timeFrame{}, err
 	}
 
 	if queryParams.Has(toDateParamName) {
@@ -68,11 +73,11 @@ func parseQueryParams(queryParams *url.Values) (*telegram.QueryOptions, error) {
 
 		toDateParsed, err = parseEpoch(toDateParam, toDateParamName)
 		if err != nil {
-			return nil, err
+			return timeFrame{}, err
 		}
 
 		if fromDateParsed.After(toDateParsed) {
-			return nil, fmt.Errorf(
+			return timeFrame{}, fmt.Errorf(
 				"%q needs to be before %q",
 				fromDateParamName,
 				toDateParamName,
@@ -80,9 +85,9 @@ func parseQueryParams(queryParams *url.Values) (*telegram.QueryOptions, error) {
 		}
 	}
 
-	return &telegram.QueryOptions{
-		ToDate:   toDateParsed,
+	return timeFrame{
 		FromDate: fromDateParsed,
+		ToDate:   toDateParsed,
 	}, nil
 }
 
@@ -124,7 +129,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 		&storage,
 	)
 
-	history, err := channel.QueryChannelHistory(filter)
+	history, err := channel.QueryChannelHistory(telegram.NewQuery(filter.FromDate, filter.ToDate))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
